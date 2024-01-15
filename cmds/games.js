@@ -1,4 +1,5 @@
 const axios = require('axios');
+const {leaderBoardsData} = path.join(__dirname, "../jsonFile/leaderBoardsData.json");
 
 module.exports = {
   config: {
@@ -18,7 +19,7 @@ module.exports = {
       threadID,
       messageID
     } = event;
-   // let timeout = 60;
+    // let timeout = 60;
     const description = await info();
 
     try {
@@ -48,20 +49,22 @@ module.exports = {
   },
   //========OnReply========
   onReply: async function ({
-    event, api, Reply, message, commandName
+    event, api, Reply, message, commandName, usersData
   }) {
+    const {
+      threadID,
+      messageID,
+      body,
+      senderID
+    } = event;
+    const userData = await usersData.get(senderID);
+    const name = userData.name;
     const handleReply = Reply;
     const {
       author
     } = handleReply;
     let category = "";
-    if (event.senderID !== Reply.author) return;
-
-    const {
-      threadID,
-      messageID,
-      body
-    } = event;
+    if (senderID !== Reply.author) return;
 
     if (handleReply.type === "category") {
       category = body.toLowerCase();
@@ -256,18 +259,42 @@ async function categorySelection(category) {
       return {
         error: "Invalid selection. Please try again."
       };
+    }
   }
-}
 
-async function info() {
-  const message = `
-  ==Please Choose A Category==\n
-  [1] - HeadOrTail\n
-  [2] - Guess The Emoji\n
-  [3] - True or False\n\n
-  Reply to this message with the number of the category you choose.
-  `;
-  return {
-    message
-  };
-}
+  async function info() {
+    const message = `
+    ==Please Choose A Category==\n
+    [1] - HeadOrTail\n
+    [2] - Guess The Emoji\n
+    [3] - True or False\n\n
+    Reply to this message with the number of the category you choose.
+    `;
+    return {
+      message
+    };
+  }
+
+  async function leaderBords() {
+    try {
+      const leaderboardsData = require(leaderboardsPath);
+
+      if (leaderboardsData.length === 0) {
+        return "No leaderboards data available.";
+      }
+
+      // Extract names and trophies
+      const namesAndTrophies = leaderboardsData.map(entry => `${entry.name} - ${entry.trophy}`);
+
+      // Join the names and trophies into a single string
+      const result = namesAndTrophies.join('\n');
+
+      return result;
+    } catch (error) {
+      return `Error retrieving leaderboards: ${error}`;
+    }
+  }
+
+  async function dec() {}
+
+  async function inc() {}
