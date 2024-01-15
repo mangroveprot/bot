@@ -1,8 +1,6 @@
 const axios = require('axios');
-const path = require ('path');
-const {
-  leaderBoardsData
-} = path.join(__dirname, "../jsonFile/leaderBoardsData.json");
+const fs = require ('fs-extra');
+const leaderBoardsData = './jsonFile/leaderBoardsData.json';
 
 module.exports = {
   config: {
@@ -71,7 +69,20 @@ module.exports = {
 
     if (handleReply.type === "category") {
       category = body.toLowerCase();
-
+      //Leaderboards
+      const boards = ["leaderboards",
+        "leaderboard",
+        "1",
+        "[1]"];
+      if (boards.some(board => category.includes(board))) {
+        try {
+          const leaderBoardsData = await leaderBoards();
+          return message.reply(`${leaderBoardsData}`);
+        } catch (error) {
+          console.error(error);
+          return message.reply(`Error retrieving leaderboards: ${error}`);
+        }
+      }
       const selection = await categorySelection(category);
       if (selection.error)
         return message.reply(`${selection.error}`);
@@ -81,7 +92,15 @@ module.exports = {
       } = selection;
 
       api.unsendMessage(handleReply.messageID, () => {
-        api.sendMessage(`You Choose ${category}. Do you wish to start or change category?\n\nReply anything to this message to start.\n\nReply "change" or "back" to change category`, threadID, (e, info) => {
+        api.sendMessage(`🔠 | You Choose: ${category}.\n\n❏  | React to this message to start.\n\n↩️ | Reply "change" or "back" to change category`, threadID, (e, info) => {
+          global.GoatBot.onReaction.set(info.messageID, {
+            commandName,
+            category,
+            messageID: info.messageID,
+            author: author,
+            type: "react"
+          });
+
           global.GoatBot.onReply.set(info.messageID, {
             commandName,
             messageID: info.messageID,
@@ -124,59 +143,71 @@ module.exports = {
         }catch(error) {
           return message.reply(`${error}`)
         }
-      } else {
-        const msg = {
-          body: `Question: ${question}\n\nPlease reply with your answer to this message.`,
-        };
-        api.unsendMessage(handleReply.messageID, () => {
-          api.sendMessage(msg, threadID, (e, info) => {
-            global.GoatBot.onReply.set(info.messageID, {
-              commandName,
-              category,
-              messageID: info.messageID,
-              author: author,
-              answer,
-              type: "answer"
-            });
-          }, messageID);
-        });
       }
     } else if (handleReply.type === "answer") {
+      //====Answer
       const {
         answer,
         category
       } = handleReply;
       if (body === answer) {
         api.unsendMessage(Reply.messageID).catch(console.error);
-        let msg = {
-          body: `✅ | Your answer is correct.\n\nPlease react to this message to continue.`
-        };
-        api.unsendMessage(Reply.messageID, () => {
-          api.sendMessage(msg, threadID, (e, info) => {
-            global.GoatBot.onReaction.set(info.messageID, {
-              commandName,
-              category,
-              messageID: info.messageID,
-              author: author,
-              type: "react"
-            });
-          }, messageID);
-        });
-      } else {
+        let trophy = Math.floor(Math.random() * 10) + 1;
 
-        let msg = `❎ | Your answer is incorrect.\n\nPlease react to this message to try again.`;
-        api.unsendMessage(Reply.messageID, () => {
-          api.sendMessage(msg, threadID, (e, info) => {
-            global.GoatBot.onReaction.set(info.messageID, {
-              commandName,
-              category: category,
-              messageID: info.messageID,
-              author: author,
-              type: "react"
-            });
-          }, messageID);
+        const incResult = await inc({
+          id: senderID,
+          name: name,
+          trophy: trophy
         });
+
+        if (incResult.success) {
+          let msg = {
+            body: `✅ | Your answer is correct.\n\n🏆 | Trophy added: ${trophy}\n\n❏  | React to this message to continue.`
+          };
+          api.unsendMessage(Reply.messageID, () => {
+            api.sendMessage(msg, threadID, (e, info) => {
+              global.GoatBot.onReaction.set(info.messageID, {
+                commandName,
+                category,
+                messageID: info.messageID,
+                author: author,
+                type: "react"
+              });
+            }, messageID);
+          });
+        } else {
+          return message.reply(`Error incrementing trophy: ${incResult.msg}`);
+        }
+        //End Of Inc
+      } else {
+        let trophy = Math.floor(Math.random() * 10) + 4; // Change Value Of the trophy if you want too
+
+        const decResult = await dec({
+          id: senderID,
+          name: name,
+          trophy: trophy
+        });
+
+        if (decResult.success) {
+          let msg = {
+            body: `❌ | Your answer is wrong.\n\n🏆 | Trophy's deducted: ${trophy}.\n\n❏  | Reply to this message to play again."`
+          };
+          api.unsendMessage(Reply.messageID, () => {
+            api.sendMessage(msg, threadID, (e, info) => {
+              global.GoatBot.onReaction.set(info.messageID, {
+                commandName,
+                category: category,
+                messageID: info.messageID,
+                author: author,
+                type: "react"
+              });
+            }, messageID);
+          });
+        } else {
+          console.error(`Error decrementing trophy: ${decResult.msg}`);
+        }
       }
+      //end of dec
     } else {
       return message.reply("error");
     }
@@ -232,7 +263,6 @@ module.exports = {
 
 //This Games Command and Api are Made By ViLLAVER If you want to change the api, then also on how the response return from you api. Answer and question only.
 async function categorySelection(category) {
-
   switch (category) {
     case "emoji":
       try {
@@ -268,7 +298,7 @@ async function categorySelection(category) {
   async function info() {
     const message = `
     ==Please Choose A Category==\n
-    [1] - HeadOrTail\n
+    [1] - Leaderboard\n
     [2] - Guess The Emoji\n
     [3] - True or False\n\n
     Reply to this message with the number of the category you choose.
@@ -278,26 +308,108 @@ async function categorySelection(category) {
     };
   }
 
-  async function leaderBords() {
+  async function leaderBoards() {
     try {
-      const leaderboardsData = require(leaderboardsPath);
+        const boardData = fs.readJsonSync(leaderBoardsData, { throws: false }) || [];
 
-      if (leaderboardsData.length === 0) {
-        return "No leaderboards data available.";
+        if (boardData.length === 0) {
+            return "No leaderboards data available.";
+        }
+
+        // Sort boardData by trophy in descending order
+        boardData.sort((a, b) => b.trophy - a.trophy);
+
+        // Map the sorted data with player numbers
+        const result = boardData.map((entry, index) => `${index + 1}. ${entry.name} - Trophy ${entry.trophy}`);
+
+        const formattedResult = result.join('\n');
+
+        return formattedResult;
+    } catch (error) {
+        console.log(error);
+        throw new Error(`Error retrieving leaderboards: ${error}`);
+    }
+}
+
+  async function dec( {
+    id,
+    name,
+    trophy
+  }) {
+    let success = false;
+    try {
+      const boardData = fs.readJsonSync(leaderBoardsData, {
+        throws: false
+      }) || [];
+
+      const index = boardData.findIndex(entry => entry.id === id);
+
+      if (index === -1) {
+        boardData.push({
+          id,
+          name,
+          trophy
+        });
+      } else {
+
+        if (boardData[index].trophy > 0) {
+          boardData[index].trophy -= trophy;
+          success = true;
+        }
+
+        if (boardData[index].name !== name) {
+          console.log(`Name updated for ID ${id}: ${boardData[index].name} -> ${name}`);
+          boardData[index].name = name;
+        }
       }
 
-      // Extract names and trophies
-      const namesAndTrophies = leaderboardsData.map(entry => `${entry.name} - ${entry.trophy}`);
-
-      // Join the names and trophies into a single string
-      const result = namesAndTrophies.join('\n');
-
-      return result;
+      fs.writeJsonSync(leaderBoardsData, boardData);
+      return {
+        success
+      };
     } catch (error) {
-      return `Error retrieving leaderboards: ${error}`;
+      const msg = `Error in dec function: ${error}`;
+      return {
+        msg
+      };
     }
   }
+  async function inc( {
+    id,
+    name,
+    trophy
+  }) {
+    let success = false;
+    try {
+      const boardData = fs.readJsonSync(leaderBoardsData, {
+        throws: false
+      }) || [];
 
-  async function dec() {}
+      const index = boardData.findIndex(entry => entry.id === id);
 
-  async function inc() {}
+      if (index === -1) {
+        boardData.push({
+          id,
+          name,
+          trophy
+        });
+      } else {
+        boardData[index].trophy += trophy;
+        success = true;
+        if (boardData[index].name !== name) {
+          console.log(`Name updated for ID ${id}: ${boardData[index].name} -> ${name}`);
+          boardData[index].name = name;
+        }
+      }
+
+      fs.writeJsonSync(leaderBoardsData, boardData);
+      return {
+        success
+      };
+    } catch (error) {
+      const msg = `Error in inc function: ${error}`;
+      return {
+        msg
+      };
+    }
+  }
