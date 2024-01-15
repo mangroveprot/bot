@@ -1,5 +1,8 @@
 const axios = require('axios');
-const {leaderBoardsData} = path.join(__dirname, "../jsonFile/leaderBoardsData.json");
+const path = require ('path');
+const {
+  leaderBoardsData
+} = path.join(__dirname, "../jsonFile/leaderBoardsData.json");
 
 module.exports = {
   config: {
